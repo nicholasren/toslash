@@ -11,6 +11,8 @@ on your home network, or a page an AI agent made for you last week.
 Extra path and query pass through: `to/api/users?id=7` opens
 `http://localhost:4390/users?id=7`.
 
+![The to/ page: each link with its description, URL and date added, and a green or red dot for local targets](docs/to-page.png)
+
 ## Install
 
 1. Download `ToSlash-<version>.dmg` from [Releases](../../releases) and drag ToSlash to Applications.

@@ -320,7 +320,7 @@ private func page(_ links: [(name: String, link: Link)], message: String = "", n
         let (n, u, d) = (esc(entry.name), esc(entry.link.url), esc(entry.link.description ?? ""))
         let about = d.isEmpty ? "" : "<div class=d>\(d)</div>"
         return """
-        <tr><td>\(dot)</td><td><a href="/\(n)">\(n)</a>\(about)</td><td class=u>\(u)</td>\
+        <tr><td>\(dot)</td><td class=l><a href="/\(n)">\(n)</a>\(about)<div class=u>\(u)</div></td>\
         <td class=c>\(day.string(from: entry.link.created))</td>\
         <td><button type=button class=edit data-name="\(n)" data-url="\(u)" data-description="\(d)">edit</button></td>\
         <td><form method=post action=/_/rm><input type=hidden name=name value="\(n)"><button>remove</button></form></td></tr>
@@ -336,8 +336,10 @@ private func page(_ links: [(name: String, link: Link)], message: String = "", n
     body{background:var(--bg);color:var(--fg);font:15px/1.5 -apple-system,system-ui,sans-serif;max-width:860px;margin:32px auto;padding:0 16px}
     h1{font-size:20px;margin:0 0 4px} p{color:var(--mute);margin:0 0 20px}
     table{width:100%;border-collapse:collapse} td{padding:8px 6px;border-top:1px solid var(--line);vertical-align:middle}
-    td.u{color:var(--mute);word-break:break-all;font-size:13px} a{color:var(--accent);text-decoration:none;font-weight:600}
-    .d{color:var(--mute);font-size:13px} td.c{color:var(--mute);font-size:13px;white-space:nowrap}
+    a{color:var(--accent);text-decoration:none;font-weight:600} td.l{width:100%}
+    .d{font-size:13px} .u{color:var(--mute);word-break:break-all;font-size:12px}
+    td.c{color:var(--mute);font-size:13px;white-space:nowrap}
+    @media (max-width:600px){td.c{display:none}}
     .dot{display:inline-block;width:8px;height:8px;border-radius:50%} .up{background:var(--up)} .down{background:var(--down)}
     form.add{display:flex;gap:8px;flex-wrap:wrap;margin:20px 0} input{font:inherit;padding:6px 8px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--fg)}
     input[name=name]{width:140px} input[name=url]{flex:1;min-width:220px} input[name=description]{flex-basis:100%}
