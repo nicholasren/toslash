@@ -25,6 +25,7 @@ put() { code -X PUT -H 'Content-Type: application/json' -d "$2" "$B/_/api/links/
 check "PUT creates a link" 200 "$(put web '{"url":"http://localhost:4390","description":"Frame room"}')"
 check "GET returns its description" "Frame room" "$(field web description)"
 check "GET returns its short link (localhost:<port> off port 80)" "http://localhost:$port/web" "$(field web link)"
+check "page has the filter box" 1 "$(curl -s -H 'Host: to' "$B/" | grep -c 'class=filter')"
 check "page shows the description" 1 "$(curl -s -H 'Host: to' "$B/" | grep -c 'class=d>Frame room')"
 created="$(field web created)"
 sleep 1

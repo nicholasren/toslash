@@ -16,8 +16,10 @@ Extra path and query pass through: `to/api/users?id=7` opens
 ## Install
 
 1. Download `ToSlash-<version>.dmg` from [Releases](../../releases) and drag ToSlash to Applications.
-2. Open it. ToSlash is not notarized, so macOS blocks the first open. Go to
-   System Settings > Privacy & Security and click **Open Anyway**, or run:
+2. Open it. ToSlash is not notarized, so macOS says **"ToSlash" Not Opened**.
+   Click **Done**, not Move to Bin. Then open System Settings > Privacy &
+   Security, scroll to Security, click **Open Anyway** next to the ToSlash
+   message, and confirm. Or skip the dialog by running:
 
    ```sh
    xattr -dr com.apple.quarantine /Applications/ToSlash.app

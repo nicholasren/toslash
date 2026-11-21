@@ -345,12 +345,14 @@ private func page(_ links: [(name: String, link: Link)], message: String = "", n
     input[name=name]{width:140px} input[name=url]{flex:1;min-width:220px} input[name=description]{flex-basis:100%}
     button{font:inherit;padding:6px 12px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--fg);cursor:pointer}
     td form{margin:0} td button{padding:2px 8px;font-size:13px;color:var(--mute)} .err{color:var(--down)}
+    input.filter{width:100%;box-sizing:border-box;margin:0 0 4px}
     </style>
     <h1>ToSlash</h1><p>\(message.isEmpty ? intro : message)</p>
     <form class=add method=post action=/_/add><input type=hidden name=old value="\(esc(old))">
     <input name=name placeholder=name value="\(esc(name))" required><input name=url placeholder="http://localhost:3000 or https://claude.ai/..." value="\(esc(url))" required>
     <button class=save>Save</button><button type=button class=cancel hidden>Cancel</button>
     <input name=description placeholder="description (optional)" value="\(esc(description))"></form>
+    \(rows.isEmpty ? "" : "<input type=search class=filter placeholder=\"Filter links (press /)\" aria-label=\"Filter links\">")
     <table>\(rows.isEmpty ? "<tr><td>No links yet.</td></tr>" : rows)</table>
     <script>
     const f = document.querySelector('form.add');
@@ -364,6 +366,17 @@ private func page(_ links: [(name: String, link: Link)], message: String = "", n
     cancel.onclick = () => { old.value = name.value = url.value = about.value = ''; editing(false); };
     f.onkeydown = e => { if (e.key === 'Escape') cancel.onclick(); };
     editing(!!old.value);
+    const filter = document.querySelector('.filter');
+    if (filter) {
+      filter.oninput = () => {
+        const q = filter.value.trim().toLowerCase();
+        for (const row of document.querySelectorAll('tr')) row.hidden = !!q && !row.querySelector('td.l').textContent.toLowerCase().includes(q);
+      };
+      filter.onkeydown = e => { if (e.key === 'Escape') { filter.value = ''; filter.oninput(); } };
+      document.addEventListener('keydown', e => {
+        if (e.key === '/' && !(e.target instanceof HTMLInputElement)) { e.preventDefault(); filter.focus(); }
+      });
+    }
     </script>
     """
 }

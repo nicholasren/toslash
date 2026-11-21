@@ -23,7 +23,7 @@ fi
 echo "built $app"
 exe="^$app/Contents/MacOS/ToSlash"
 if pkill -f "$exe"; then
-  # open only starts a new copy once the old one has exited; before that it just activates it.
+  # Plain open can still find the exiting copy registered and only activate it, so force a new one.
   while pgrep -f "$exe" >/dev/null; do sleep 0.1; done
-  open "$app"
+  open -n "$app"
 fi
