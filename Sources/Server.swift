@@ -129,6 +129,8 @@ struct Response {
     var location: String?
     var body = ""
     var contentType = "text/html; charset=utf-8"
+    /// Sent instead of `body` when set, for non-text responses.
+    var binary: Data?
 
     static func json(_ status: Int, _ value: some Encodable) -> Response {
         Response(status: status, body: String(decoding: try! encoder.encode(value), as: UTF8.self) + "\n",
@@ -140,8 +142,9 @@ struct Response {
                        404: "Not Found", 405: "Method Not Allowed"]
         var head = "HTTP/1.1 \(status) \(reasons[status] ?? "")\r\n"
         if let location { head += "Location: \(location)\r\nCache-Control: no-store\r\n" }
-        let data = Data(body.utf8)
+        let data = binary ?? Data(body.utf8)
         if !data.isEmpty { head += "Content-Type: \(contentType)\r\n" }
+        if binary != nil { head += "Cache-Control: max-age=86400\r\n" }
         head += "Content-Length: \(data.count)\r\nConnection: close\r\n\r\n"
         return Data(head.utf8) + data
     }
@@ -197,6 +200,10 @@ func route(_ request: Request, loopback: Bool) -> Response {
         let rest = String(path.dropFirst(name.count + 1))
         let links = Store.shared.links
         if name.isEmpty { return Response(status: 200, body: page(links)) }
+        if request.path == iconPath {
+            guard let pageIcon else { return Response(status: 404) }
+            return Response(status: 200, contentType: "image/png", binary: pageIcon)
+        }
         if let link = links.first(where: { $0.name == name })?.link {
             return Response(status: 302, location: target(link.url, rest, request.query))
         }
@@ -224,6 +231,9 @@ func route(_ request: Request, loopback: Bool) -> Response {
         return Response(status: 405)
     }
 }
+
+/// Under /_/, which no link name can start with.
+let iconPath = "/_/icon.png"
 
 // MARK: API
 
@@ -329,12 +339,12 @@ private func page(_ links: [(name: String, link: Link)], message: String = "", n
     let intro = "\(site)/&lt;name&gt; redirects to the saved URL. Extra path and query are passed through."
     return """
     <!doctype html><meta charset=utf-8><meta name=viewport content="width=device-width">
-    <title>ToSlash</title>
+    <title>ToSlash</title><link rel=icon href=\(iconPath)><link rel=apple-touch-icon href=\(iconPath)>
     <style>
     :root{--bg:#fff;--fg:#1a1a1a;--mute:#6b6b6b;--line:#e5e5e5;--up:#1a7f37;--down:#c62828;--accent:#0b57d0}
     @media (prefers-color-scheme:dark){:root{--bg:#151515;--fg:#e8e8e8;--mute:#9a9a9a;--line:#2c2c2c;--up:#3fb950;--down:#f47067;--accent:#7aa7ff}}
     body{background:var(--bg);color:var(--fg);font:15px/1.5 -apple-system,system-ui,sans-serif;max-width:860px;margin:32px auto;padding:0 16px}
-    h1{font-size:20px;margin:0 0 4px} p{color:var(--mute);margin:0 0 20px}
+    h1{font-size:20px;margin:0 0 4px;display:flex;align-items:center;gap:8px} h1 img{width:28px;height:28px} p{color:var(--mute);margin:0 0 20px}
     table{width:100%;border-collapse:collapse} td{padding:8px 6px;border-top:1px solid var(--line);vertical-align:middle}
     a{color:var(--accent);text-decoration:none;font-weight:600} td.l{width:100%}
     .d{font-size:13px} .u{color:var(--mute);word-break:break-all;font-size:12px}
@@ -347,7 +357,7 @@ private func page(_ links: [(name: String, link: Link)], message: String = "", n
     td form{margin:0} td button{padding:2px 8px;font-size:13px;color:var(--mute)} .err{color:var(--down)}
     input.filter{width:100%;box-sizing:border-box;margin:0 0 4px}
     </style>
-    <h1>ToSlash</h1><p>\(message.isEmpty ? intro : message)</p>
+    <h1><img src=\(iconPath) alt="">ToSlash</h1><p>\(message.isEmpty ? intro : message)</p>
     <form class=add method=post action=/_/add><input type=hidden name=old value="\(esc(old))">
     <input name=name placeholder=name value="\(esc(name))" required><input name=url placeholder="http://localhost:3000 or https://claude.ai/..." value="\(esc(url))" required>
     <button class=save>Save</button><button type=button class=cancel hidden>Cancel</button>

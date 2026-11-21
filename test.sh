@@ -27,6 +27,8 @@ check "GET returns its description" "Frame room" "$(field web description)"
 check "GET returns its short link (localhost:<port> off port 80)" "http://localhost:$port/web" "$(field web link)"
 check "page has the filter box" 1 "$(curl -s -H 'Host: to' "$B/" | grep -c 'class=filter')"
 check "page shows the description" 1 "$(curl -s -H 'Host: to' "$B/" | grep -c 'class=d>Frame room')"
+check "page links the app icon" 1 "$(curl -s -H 'Host: to' "$B/" | grep -c 'rel=icon href=/_/icon.png')"
+check "app icon is a PNG" "200 image/png" "$(curl -s -o /dev/null -w '%{http_code} %{content_type}' -H 'Host: to' "$B/_/icon.png")"
 created="$(field web created)"
 sleep 1
 check "PUT on an existing name updates it" 200 "$(put web '{"url":"http://localhost:4391","description":"Frame room v2"}')"

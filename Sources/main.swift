@@ -108,6 +108,27 @@ func menuBarGlyph() -> NSImage {
     return image
 }
 
+/// The app icon's tile as a 256 px PNG for the to/ page, cut from the bundled .icns.
+/// The .icns follows Apple's grid, an 824 px tile inside a 1024 px canvas, so the
+/// transparent margin is cropped off. nil when not running from the app bundle.
+let pageIcon: Data? = {
+    guard let url = Bundle.main.url(forResource: "AppIcon", withExtension: "icns"),
+          let image = NSImage(contentsOf: url) else { return nil }
+    var full = NSRect(x: 0, y: 0, width: 1024, height: 1024)
+    guard let cg = image.cgImage(forProposedRect: &full, context: nil, hints: nil) else { return nil }
+    let k = CGFloat(cg.width) / 1024
+    guard let tile = cg.cropping(to: CGRect(x: 100 * k, y: 100 * k, width: 824 * k, height: 824 * k)) else { return nil }
+    let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 256, pixelsHigh: 256, bitsPerSample: 8,
+                               samplesPerPixel: 4, hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB,
+                               bytesPerRow: 0, bitsPerPixel: 0)!
+    NSGraphicsContext.saveGraphicsState()
+    NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: rep)
+    NSGraphicsContext.current!.imageInterpolation = .high
+    NSGraphicsContext.current!.cgContext.draw(tile, in: CGRect(x: 0, y: 0, width: 256, height: 256))
+    NSGraphicsContext.restoreGraphicsState()
+    return rep.representation(using: .png, properties: [:])
+}()
+
 let app = NSApplication.shared
 let delegate = App()
 app.delegate = delegate
