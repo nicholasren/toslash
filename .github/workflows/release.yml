@@ -1,0 +1,96 @@
+name: release
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing tag to build and release, such as v0.1.1
+        required: true
+
+permissions: {}
+
+env:
+  TAG: ${{ inputs.tag || (github.ref_type == 'tag' && github.ref_name) || '' }}
+
+jobs:
+  build:
+    runs-on: macos-latest
+    permissions:
+      contents: read
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.tag }}
+          persist-credentials: false
+      - id: version
+        run: echo "version=$(plutil -extract CFBundleShortVersionString raw Info.plist)" >> "$GITHUB_OUTPUT"
+      - name: Check the tag matches Info.plist
+        if: env.TAG != ''
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          if [[ $TAG != "v$VERSION" ]]; then
+            echo "::error::tag $TAG does not match Info.plist version $VERSION"
+            exit 1
+          fi
+      - run: ./test.sh
+      - run: ./package.sh
+      - name: Write the checksum
+        working-directory: dist
+        env:
+          DMG: ToSlash-${{ steps.version.outputs.version }}.dmg
+        run: |
+          shasum -a 256 "$DMG" > "$DMG.sha256"
+          shasum -a 256 -c "$DMG.sha256"
+      - if: env.TAG != ''
+        uses: actions/upload-artifact@v7
+        with:
+          name: release
+          path: dist/ToSlash-${{ steps.version.outputs.version }}.dmg*
+          if-no-files-found: error
+
+  release:
+    needs: build
+    if: github.event_name == 'workflow_dispatch' || github.ref_type == 'tag'
+    runs-on: macos-latest
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    env:
+      DMG: dist/ToSlash-${{ needs.build.outputs.version }}.dmg
+      VERSION: ${{ needs.build.outputs.version }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+      - uses: actions/download-artifact@v8
+        with:
+          name: release
+          path: dist
+      - uses: actions/attest-build-provenance@v4
+        with:
+          subject-path: ${{ env.DMG }}
+      - name: Publish the release assets
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "$DMG" "$DMG.sha256" --clobber
+          else
+            gh release create "$TAG" --verify-tag --generate-notes "$DMG" "$DMG.sha256"
+          fi
+      - name: Point the cask at the release
+        run: |
+          [[ $(gh release view --json tagName -q .tagName) == "$TAG" ]] || exit 0
+          sha="$(cut -d ' ' -f 1 "$DMG.sha256")"
+          sed -i '' -E "s/^  version \".*\"/  version \"$VERSION\"/; s/^  sha256 \".*\"/  sha256 \"$sha\"/" Casks/toslash.rb
+          git diff --quiet && exit 0
+          git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
+            commit -am "chore(cask): update toslash to $VERSION"
+          git push origin HEAD:main

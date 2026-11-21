@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Build a universal ToSlash.app and wrap it in dist/ToSlash-<version>.dmg for a GitHub release.
 # The version comes from Info.plist. Without TOSLASH_SIGN_IDENTITY the app is signed ad hoc,
-# so Gatekeeper blocks the first open until the user allows it (see the release notes).
+# so Gatekeeper blocks the first open until the user allows it (see Install in the README).
 set -euo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"
 version="$(plutil -extract CFBundleShortVersionString raw "$here/Info.plist")"

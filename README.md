@@ -15,8 +15,39 @@ Extra path and query pass through: `to/api/users?id=7` opens
 
 ## Install
 
-1. Download `ToSlash-<version>.dmg` from [Releases](../../releases) and drag ToSlash to Applications.
-2. Open it. ToSlash is not notarized, so macOS says **"ToSlash" Not Opened**.
+ToSlash needs macOS 14 or later, on Apple silicon or Intel. Each release's dmg
+is built by GitHub Actions from this repo. Install it with Homebrew or by hand.
+
+### Homebrew
+
+```sh
+brew tap nicholasren/toslash https://github.com/nicholasren/toslash
+brew install --cask nicholasren/toslash/toslash
+```
+
+Homebrew checks the download against the SHA-256 in the cask, which the release
+workflow updates after each release. The cask then removes the quarantine flag
+from the app. That skips the Gatekeeper prompt, the same as the `xattr` command
+in the dmg steps below. This route proves the app matches the dmg this repo
+released.
+
+### Download the dmg
+
+1. Download `ToSlash-<version>.dmg` and `ToSlash-<version>.dmg.sha256` from
+   [Releases](../../releases).
+2. Check the download. In the download folder, run:
+
+   ```sh
+   shasum -a 256 -c ToSlash-<version>.dmg.sha256
+   gh attestation verify ToSlash-<version>.dmg -R nicholasren/toslash
+   ```
+
+   The first command proves the dmg matches the published checksum. The second
+   needs the [GitHub CLI](https://cli.github.com) and proves the release
+   workflow in this repo built the dmg on GitHub. Only releases the workflow
+   built have the `.sha256` file and an attestation.
+3. Open the dmg and drag ToSlash to Applications.
+4. Open it. ToSlash is not notarized, so macOS says **"ToSlash" Not Opened**.
    Click **Done**, not Move to Bin. Then open System Settings > Privacy &
    Security, scroll to Security, click **Open Anyway** next to the ToSlash
    message, and confirm. Or skip the dialog by running:
@@ -25,11 +56,11 @@ Extra path and query pass through: `to/api/users?id=7` opens
    xattr -dr com.apple.quarantine /Applications/ToSlash.app
    ```
 
-3. ToSlash asks to add `127.0.0.1 to` to `/etc/hosts` so the `to/` name reaches
-   it. macOS asks for an administrator password. Without this line, use
-   `http://localhost/` instead.
+### First open
 
-Requires macOS 14 or later, on Apple silicon or Intel.
+ToSlash asks to add `127.0.0.1 to` to `/etc/hosts` so the `to/` name reaches
+it. macOS asks for an administrator password. Without this line, use
+`http://localhost/` instead.
 
 ## Use
 
