@@ -120,17 +120,6 @@ another name:
 defaults write io.github.nicholasren.toslash host <name>
 ```
 
-## Build
-
-```sh
-./build.sh            # build into ~/Applications and relaunch it if running
-./test.sh             # run a throwaway copy on port 7799 and check its HTTP behaviour
-./package.sh          # build a universal app into dist/ToSlash-<version>.dmg
-```
-
-`icon/make-icon.swift` renders `icon/AppIcon.icns`; rerun it only when the
-icon design changes.
-
 ## License
 
 MIT
