@@ -27,9 +27,10 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
         case .stopped: "Stopped"
         case .failed(let error): "Failed: \(error)"
         }
-        let line = NSMenuItem(title: status, action: nil, keyEquivalent: "")
-        line.isEnabled = false
-        menu.addItem(line)
+        menu.addItem(info(status))
+        if server.state == .running, allowNetwork, let name = networkName() {
+            menu.addItem(info("Other devices: http://\(name)\(port == 80 ? "" : ":\(port)")/"))
+        }
         menu.addItem(.separator())
         menu.addItem(item("Start", #selector(start), enabled: !server.isActive))
         menu.addItem(item("Stop", #selector(stop), enabled: server.isActive))
@@ -38,7 +39,16 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let login = item("Open at Login", #selector(toggleLogin), enabled: true)
         login.state = SMAppService.mainApp.status == .enabled ? .on : .off
         menu.addItem(login)
+        let network = item("Allow Other Devices", #selector(toggleNetwork), enabled: true)
+        network.state = allowNetwork ? .on : .off
+        menu.addItem(network)
         menu.addItem(NSMenuItem(title: "Quit ToSlash", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
+    }
+
+    func info(_ title: String) -> NSMenuItem {
+        let item = NSMenuItem(title: title, action: nil, keyEquivalent: "")
+        item.isEnabled = false
+        return item
     }
 
     func item(_ title: String, _ selector: Selector, enabled: Bool) -> NSMenuItem {
@@ -51,6 +61,12 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
     @objc func start() { server.start() }
     @objc func stop() { server.stop() }
     @objc func restart() { server.restart() }
+
+    /// A stopped server stays stopped; the next start picks up the setting.
+    @objc func toggleNetwork() {
+        allowNetwork.toggle()
+        if server.isActive { server.restart() }
+    }
 
     @objc func toggleLogin() {
         let service = SMAppService.mainApp

@@ -1,5 +1,6 @@
 import Foundation
 import Network
+import SystemConfiguration
 
 /// `defaults write io.github.nicholasren.toslash port 7788`, or launch with `-port 7788`.
 let port: UInt16 = UInt16(exactly: UserDefaults.standard.integer(forKey: "port")).flatMap { $0 == 0 ? nil : $0 } ?? 80
@@ -12,6 +13,16 @@ let shortHost: String = {
 }()
 let site = port == 80 ? shortHost : "localhost:\(port)"
 let localHosts: Set<String> = ["localhost", "127.0.0.1", "::1", "[::1]", shortHost]
+/// Lets other devices on the network read links. Toggled from the menu; `-allowNetwork YES` also works.
+var allowNetwork: Bool {
+    get { UserDefaults.standard.bool(forKey: "allowNetwork") }
+    set { UserDefaults.standard.set(newValue, forKey: "allowNetwork") }
+}
+
+/// This Mac's Bonjour name, as in mac.local. Read each time, since the owner can rename the Mac.
+func networkName() -> String? {
+    (SCDynamicStoreCopyLocalHostName(nil) as String?).map { "\($0).local" }
+}
 
 enum ServerState: Equatable {
     case stopped, starting, running
@@ -34,10 +45,12 @@ final class Server {
         wanted = true
         guard listener == nil else { return }
         // macOS lets an unprivileged process take port 80 only on the wildcard address,
-        // so the listener binds there but is pinned to the loopback interface; the kernel
-        // never hands it a connection from another machine. route() still checks the peer.
+        // so the listener binds there. Unless other devices are allowed, it is pinned to the
+        // loopback interface and the kernel never hands it a connection from another machine.
+        // route() still checks the peer.
+        let allowNetwork = allowNetwork
         let parameters = NWParameters.tcp
-        parameters.requiredInterfaceType = .loopback
+        if !allowNetwork { parameters.requiredInterfaceType = .loopback }
         let listener: NWListener
         do {
             listener = try NWListener(using: parameters, on: NWEndpoint.Port(rawValue: port)!)
@@ -60,7 +73,7 @@ final class Server {
                 }
             }
         }
-        listener.newConnectionHandler = { [queue] connection in serve(connection, on: queue) }
+        listener.newConnectionHandler = { [queue] connection in serve(connection, on: queue, allowNetwork: allowNetwork) }
         self.listener = listener
         state = .starting
         listener.start(queue: queue)
@@ -153,44 +166,86 @@ struct Response {
     }
 }
 
-private func serve(_ connection: NWConnection, on queue: DispatchQueue) {
+private func serve(_ connection: NWConnection, on queue: DispatchQueue, allowNetwork: Bool) {
     connection.start(queue: queue)
-    receive(connection, Data(), loopback: isLoopback(connection.endpoint))
+    let client = Client(connection.endpoint)
+    receive(connection, Data()) { route($0, from: client, allowNetwork: allowNetwork) }
 }
 
-private func receive(_ connection: NWConnection, _ buffer: Data, loopback: Bool) {
+private func receive(_ connection: NWConnection, _ buffer: Data, _ respond: @escaping (Request) -> Response) {
     connection.receive(minimumIncompleteLength: 1, maximumLength: 65536) { data, _, done, error in
         var buffer = buffer
         if let data { buffer.append(data) }
         if let request = Request(buffer) {
             // Off the network queue: a page view checks hosts and can take half a second.
             DispatchQueue.global().async {
-                let response = route(request, loopback: loopback)
+                let response = respond(request)
                 connection.send(content: response.bytes, completion: .contentProcessed { _ in connection.cancel() })
             }
         } else if done || error != nil || buffer.count > 1 << 20 {
             connection.cancel()
         } else {
-            receive(connection, buffer, loopback: loopback)
+            receive(connection, buffer, respond)
         }
     }
 }
 
-private func isLoopback(_ endpoint: NWEndpoint) -> Bool {
-    guard case .hostPort(let host, _) = endpoint else { return false }
-    switch host {
-    case .ipv4(let address): return address.isLoopback
-    case .ipv6(let address): return address.isLoopback || address.asIPv4?.isLoopback == true
-    default: return false
+enum Client {
+    case thisMac, otherDevice
+
+    init(_ peer: NWEndpoint) {
+        guard case .hostPort(let host, _) = peer else { self = .otherDevice; return }
+        let loopback = switch host {
+        case .ipv4(let address): address.isLoopback
+        case .ipv6(let address): address.isLoopback || address.asIPv4?.isLoopback == true
+        default: false
+        }
+        self = loopback ? .thisMac : .otherDevice
+    }
+
+    /// Host names its requests may carry. A name outside these reaches the server only
+    /// because some DNS points it here (DNS rebinding), so the request is refused.
+    func accepts(_ host: String) -> Bool {
+        switch self {
+        case .thisMac:
+            return localHosts.contains(host)
+        case .otherDevice:
+            let bracketed = host.hasPrefix("[") && host.hasSuffix("]")
+            return IPv4Address(host) != nil || (bracketed && IPv6Address(String(host.dropFirst().dropLast())) != nil)
+                || host == shortHost || host.caseInsensitiveCompare(networkName() ?? "") == .orderedSame
+        }
+    }
+}
+
+/// What a request may do. Every method but GET counts as a write.
+enum Access {
+    case denied, read, readWrite
+
+    init(_ client: Client, allowNetwork: Bool) {
+        switch (client, allowNetwork) {
+        case (.thisMac, _): self = .readWrite
+        case (.otherDevice, false): self = .denied
+        case (.otherDevice, true): self = .read
+        }
+    }
+
+    func allows(_ method: String) -> Bool {
+        switch self {
+        case .denied: false
+        case .read: method == "GET"
+        case .readWrite: true
+        }
     }
 }
 
 // MARK: Routes
 
-func route(_ request: Request, loopback: Bool) -> Response {
-    let host = URLComponents(string: "//" + (request.headers["host"] ?? ""))?.host ?? ""
-    // Other machines, and Host names pointed at us (DNS rebinding), are refused.
-    guard loopback, localHosts.contains(host) else { return Response(status: 403, body: "forbidden") }
+func route(_ request: Request, from client: Client, allowNetwork: Bool) -> Response {
+    let hostHeader = request.headers["host"] ?? ""
+    let host = URLComponents(string: "//" + hostHeader)?.percentEncodedHost ?? ""
+    let access = Access(client, allowNetwork: allowNetwork)
+    guard access.allows(request.method), client.accepts(host) else { return Response(status: 403, body: "forbidden") }
+    let view = client == .thisMac ? PageView(site: site, editable: true) : PageView(site: hostHeader, editable: false)
     // Browsers send Origin on writes, so a page on another site cannot change links.
     if request.method != "GET", let origin = request.headers["origin"], hostAndPort(origin) != request.headers["host"] {
         return Response(status: 403, body: "forbidden")
@@ -202,16 +257,18 @@ func route(_ request: Request, loopback: Bool) -> Response {
         let name = String(path.prefix { $0 != "/" })
         let rest = String(path.dropFirst(name.count + 1))
         let links = Store.shared.links
-        if name.isEmpty { return Response(status: 200, body: page(links)) }
+        if name.isEmpty { return Response(status: 200, body: page(links, view)) }
         if request.path == iconPath {
             guard let pageIcon else { return Response(status: 404) }
             return Response(status: 200, contentType: "image/png", binary: pageIcon)
         }
         if let link = links.first(where: { $0.name == name })?.link {
-            return Response(status: 302, location: target(link.url, rest, request.query))
+            let url = client == .thisMac ? link.url : reachable(link.url, at: host)
+            return Response(status: 302, location: target(url, rest, request.query))
         }
         if name == "favicon.ico" { return Response(status: 404) }
-        return Response(status: 404, body: page(links, message: failure("No link \"\(name)\". Add it below."), name: name))
+        let missing = "No link \"\(name)\"." + (view.editable ? " Add it below." : "")
+        return Response(status: 404, body: page(links, view, message: failure(missing), name: name))
     case "POST":
         let form = parseForm(request.body)
         let field = { (key: String) in form[key, default: ""].trimmingCharacters(in: .whitespaces) }
@@ -226,7 +283,7 @@ func route(_ request: Request, loopback: Bool) -> Response {
             return Response(status: 404)
         }
         if let error {
-            return Response(status: 400, body: page(Store.shared.links, message: failure(error), name: field("name"),
+            return Response(status: 400, body: page(Store.shared.links, view, message: failure(error), name: field("name"),
                                                     url: field("url"), description: field("description"), old: field("old")))
         }
         return Response(status: 303, location: "/")
@@ -286,6 +343,15 @@ private func api(_ request: Request) -> Response {
     }
 }
 
+/// A link to this Mac's loopback, rewritten to the host another device used to reach this Mac.
+/// `host` is percent-encoded and bracketed for IPv6, as URLComponents keeps it.
+func reachable(_ url: String, at host: String) -> String {
+    guard var parts = URLComponents(string: url), let saved = parts.host?.lowercased(),
+          ["localhost", "127.0.0.1", "::1", "[::1]"].contains(saved) else { return url }
+    parts.percentEncodedHost = host
+    return parts.string ?? url
+}
+
 func target(_ url: String, _ rest: String, _ query: String) -> String {
     var out = url
     if !rest.isEmpty {
@@ -326,20 +392,51 @@ private let day: DateFormatter = {
     return f
 }()
 
-private func page(_ links: [(name: String, link: Link)], message: String = "", name: String = "",
+struct PageView {
+    let site: String
+    let editable: Bool
+}
+
+private func page(_ links: [(name: String, link: Link)], _ view: PageView, message: String = "", name: String = "",
                   url: String = "", description: String = "", old: String = "") -> String {
     let rows = zip(links, statuses(links.map(\.link.url))).map { entry, up in
         let dot = up.map { "<span class=\"dot \($0 ? "up" : "down")\" title=\"\($0 ? "up" : "not reachable")\"></span>" } ?? ""
         let (n, u, d) = (esc(entry.name), esc(entry.link.url), esc(entry.link.description ?? ""))
         let about = d.isEmpty ? "" : "<div class=d>\(d)</div>"
+        let controls = view.editable ? """
+        <td><button type=button class=edit data-name="\(n)" data-url="\(u)" data-description="\(d)">edit</button></td>\
+        <td><form method=post action=/_/rm><input type=hidden name=name value="\(n)"><button>remove</button></form></td>
+        """ : ""
         return """
         <tr><td>\(dot)</td><td class=l><a href="/\(n)">\(n)</a>\(about)<div class=u>\(u)</div></td>\
-        <td class=c>\(day.string(from: entry.link.created))</td>\
-        <td><button type=button class=edit data-name="\(n)" data-url="\(u)" data-description="\(d)">edit</button></td>\
-        <td><form method=post action=/_/rm><input type=hidden name=name value="\(n)"><button>remove</button></form></td></tr>
+        <td class=c>\(day.string(from: entry.link.created))</td>\(controls)</tr>
         """
     }.joined()
-    let intro = "\(site)/&lt;name&gt; redirects to the saved URL. Extra path and query are passed through."
+    let intro = view.editable
+        ? "\(esc(view.site))/&lt;name&gt; redirects to the saved URL. Extra path and query are passed through."
+        : "http://\(esc(view.site))/&lt;name&gt; redirects to the saved URL. Extra path and query are passed through. "
+            + "Links can be changed only on the Mac running ToSlash."
+    let addForm = """
+    <form class=add method=post action=/_/add><input type=hidden name=old value="\(esc(old))">
+    <input name=name placeholder=name value="\(esc(name))" required><input name=url placeholder="http://localhost:3000 or https://claude.ai/..." value="\(esc(url))" required>
+    <button class=save>Save</button><button type=button class=cancel hidden>Cancel</button>
+    <input name=description placeholder="description (optional)" value="\(esc(description))"></form>
+    """
+    let editScript = """
+    <script>
+    const f = document.querySelector('form.add');
+    const [old, name, url, about] = ['old', 'name', 'url', 'description'].map(k => f.elements.namedItem(k));
+    const save = f.querySelector('.save'), cancel = f.querySelector('.cancel');
+    const editing = on => { save.textContent = on ? 'Update' : 'Save'; cancel.hidden = !on; };
+    for (const b of document.querySelectorAll('.edit')) b.onclick = () => {
+      old.value = name.value = b.dataset.name; url.value = b.dataset.url; about.value = b.dataset.description;
+      editing(true); scrollTo(0, 0); url.focus(); url.select();
+    };
+    cancel.onclick = () => { old.value = name.value = url.value = about.value = ''; editing(false); };
+    f.onkeydown = e => { if (e.key === 'Escape') cancel.onclick(); };
+    editing(!!old.value);
+    </script>
+    """
     return """
     <!doctype html><meta charset=utf-8><meta name=viewport content="width=device-width">
     <title>ToSlash</title><link rel=icon href=\(iconPath)><link rel=apple-touch-icon href=\(iconPath)>
@@ -361,24 +458,11 @@ private func page(_ links: [(name: String, link: Link)], message: String = "", n
     input.filter{width:100%;box-sizing:border-box;margin:0 0 4px}
     </style>
     <h1><img src=\(iconPath) alt="">ToSlash</h1><p>\(message.isEmpty ? intro : message)</p>
-    <form class=add method=post action=/_/add><input type=hidden name=old value="\(esc(old))">
-    <input name=name placeholder=name value="\(esc(name))" required><input name=url placeholder="http://localhost:3000 or https://claude.ai/..." value="\(esc(url))" required>
-    <button class=save>Save</button><button type=button class=cancel hidden>Cancel</button>
-    <input name=description placeholder="description (optional)" value="\(esc(description))"></form>
+    \(view.editable ? addForm : "")
     \(rows.isEmpty ? "" : "<input type=search class=filter placeholder=\"Filter links (press /)\" aria-label=\"Filter links\">")
     <table>\(rows.isEmpty ? "<tr><td>No links yet.</td></tr>" : rows)</table>
+    \(view.editable ? editScript : "")
     <script>
-    const f = document.querySelector('form.add');
-    const [old, name, url, about] = ['old', 'name', 'url', 'description'].map(k => f.elements.namedItem(k));
-    const save = f.querySelector('.save'), cancel = f.querySelector('.cancel');
-    const editing = on => { save.textContent = on ? 'Update' : 'Save'; cancel.hidden = !on; };
-    for (const b of document.querySelectorAll('.edit')) b.onclick = () => {
-      old.value = name.value = b.dataset.name; url.value = b.dataset.url; about.value = b.dataset.description;
-      editing(true); scrollTo(0, 0); url.focus(); url.select();
-    };
-    cancel.onclick = () => { old.value = name.value = url.value = about.value = ''; editing(false); };
-    f.onkeydown = e => { if (e.key === 'Escape') cancel.onclick(); };
-    editing(!!old.value);
     const filter = document.querySelector('.filter');
     if (filter) {
       filter.oninput = () => {
