@@ -75,6 +75,6 @@ curl -s -X DELETE http://localhost/_/api/links/<name>
 
 ## Limits
 
-ToSlash is reachable only from the user's own Mac, so this works for agents
+ToSlash takes changes only from the user's own Mac, so this works for agents
 running there, not for hosted chat. It assumes ToSlash serves port 80, its
 default.
