@@ -33,11 +33,14 @@ final class Server {
     func start() {
         wanted = true
         guard listener == nil else { return }
-        // macOS lets an unprivileged process take port 80 only on all interfaces,
-        // so the listener is not bound to loopback; route() refuses other machines.
+        // macOS lets an unprivileged process take port 80 only on the wildcard address,
+        // so the listener binds there but is pinned to the loopback interface; the kernel
+        // never hands it a connection from another machine. route() still checks the peer.
+        let parameters = NWParameters.tcp
+        parameters.requiredInterfaceType = .loopback
         let listener: NWListener
         do {
-            listener = try NWListener(using: .tcp, on: NWEndpoint.Port(rawValue: port)!)
+            listener = try NWListener(using: parameters, on: NWEndpoint.Port(rawValue: port)!)
         } catch {
             fail(error.localizedDescription)
             return

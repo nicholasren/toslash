@@ -108,10 +108,11 @@ Each link comes back as `name`, `url`, `description`, `created` and `link`
 ## How it works
 
 ToSlash runs a small HTTP server on port 80. macOS lets an app use port 80
-without root only when it listens on all network interfaces, so ToSlash
-refuses every request that does not come from your own Mac. It also refuses
-requests that name another host, and writes from other websites, so a page you
-visit cannot change your links.
+without root only on the wildcard address, so ToSlash binds there but pins the
+socket to the loopback interface. Connections from other machines never reach
+it, and `lsof` still shows `*:80`. It also refuses requests that name another
+host, and writes from other websites, so a page you visit cannot change your
+links.
 
 If `to/` is already taken on your network, for example by a work VPN, pick
 another name:
