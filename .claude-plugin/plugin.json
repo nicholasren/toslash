@@ -1,0 +1,9 @@
+{
+  "name": "toslash",
+  "description": "Lets your agent give the pages and dev servers it makes a short to/<name> link on ToSlash, and find them again later.",
+  "author": { "name": "Xiaojun Ren", "url": "https://github.com/nicholasren" },
+  "homepage": "https://github.com/nicholasren/toslash",
+  "repository": "https://github.com/nicholasren/toslash",
+  "license": "MIT",
+  "keywords": ["links", "bookmarks", "localhost", "macos"]
+}

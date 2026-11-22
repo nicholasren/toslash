@@ -1,6 +1,6 @@
 ---
 name: toslash
-description: Give things the user makes a short, memorable to/<name> link on ToSlash, the link hub on their Mac, and look those links up later. Use right after publishing an artifact or other hosted page, after starting a local dev server the user will come back to, when the user asks to name or bookmark a link, or when they ask where something they made earlier lives or which port runs an app.
+description: Give things the user makes a short, memorable to/<name> link on ToSlash, the link hub on their Mac, and look those links up later. Use right after publishing an artifact or other hosted page, after starting a local dev server the user will come back to, when the user asks to name or bookmark a link, when they ask where something they made earlier lives or which port runs an app, or when they ask to install or set up ToSlash.
 ---
 
 # ToSlash
@@ -15,8 +15,27 @@ ToSlash runs on the user's Mac. `http://to/<name>` redirects to a saved URL, and
 curl -sf -o /dev/null http://localhost/_/api/links
 ```
 
-If this fails, tell the user ToSlash is not running and carry on without it. Do
-not retry or try to start it.
+If this fails, ToSlash is not running. Start it:
+
+```sh
+open -b io.github.nicholasren.toslash
+```
+
+- **It starts.** Wait a second and check again.
+- **`open` fails.** ToSlash is not installed. Ask the user whether to install
+  it. Install it only if they agree, with Homebrew:
+
+  ```sh
+  brew tap nicholasren/toslash https://github.com/nicholasren/toslash
+  brew install --cask nicholasren/toslash/toslash
+  open -b io.github.nicholasren.toslash
+  ```
+
+  On first open, ToSlash asks for an administrator password to add the `to`
+  name to `/etc/hosts`. Tell the user to expect that dialog. `localhost` works
+  without it, and the API calls below use `localhost`.
+
+If it still does not answer, or the user declines, carry on without it.
 
 ## Register a link
 

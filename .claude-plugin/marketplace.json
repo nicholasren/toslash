@@ -1,0 +1,15 @@
+{
+  "name": "toslash",
+  "description": "ToSlash, short to/<name> links on your Mac, and the agent skill that names things for you.",
+  "owner": {
+    "name": "Xiaojun Ren",
+    "url": "https://github.com/nicholasren"
+  },
+  "plugins": [
+    {
+      "name": "toslash",
+      "source": "./",
+      "description": "Lets your agent give the pages and dev servers it makes a short to/<name> link on ToSlash, and find them again later."
+    }
+  ]
+}
