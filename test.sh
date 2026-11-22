@@ -47,7 +47,7 @@ check "unknown short link is 404" 404 "$(code "$B/nope")"
 check "foreign Host header refused" 403 "$(curl -s -o /dev/null -w '%{http_code}' -H 'Host: other.example' "$B/web")"
 lan="$(ipconfig getifaddr en0 2>/dev/null || true)"
 if [[ -n $lan ]]; then
-  check "request from the network refused" 403 "$(curl -s -o /dev/null -w '%{http_code}' "http://$lan:$port/web")"
+  check "connection from the network never reaches the server" 000 "$(curl -s -o /dev/null -w '%{http_code}' "http://$lan:$port/web")"
 fi
 
 check "form adds a link" 303 "$(code -d 'name=doc&url=https://example.com&description=Spec' "$B/_/add")"
