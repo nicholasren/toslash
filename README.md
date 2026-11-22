@@ -82,6 +82,10 @@ To use your links from a phone on the same Wi-Fi or over Tailscale, turn on
 Other devices can only read. They see the list and follow links. Only the Mac
 running ToSlash can add, edit, or remove links.
 
+Any device on the same network can read your links while this is on, including
+their URLs. The setting stays on until you turn it off, so turn it off before
+joining a network you don't trust, such as café or office Wi-Fi.
+
 A link to `localhost` or `127.0.0.1` sends the other device to the Mac's
 address on the same port. For example, a link saved as `http://localhost:4390`
 takes the phone to `http://192.168.4.39:4390`. The server on that port must
