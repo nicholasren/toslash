@@ -16,7 +16,22 @@ Extra path and query pass through: `to/api/users?id=7` opens
 ## Install
 
 ToSlash needs macOS 14 or later, on Apple silicon or Intel. Each release's dmg
-is built by GitHub Actions from this repo. Install it with Homebrew or by hand.
+is built by GitHub Actions from this repo. Install it with Homebrew or by hand,
+or ask your coding agent to do it.
+
+### With your agent
+
+In Claude Code, install the plugin, then ask Claude to set up ToSlash:
+
+```sh
+claude plugin install toslash --marketplace nicholasren/toslash
+```
+
+The plugin adds the ToSlash skill. The first time the skill runs and ToSlash is
+not installed, it asks whether to install ToSlash with Homebrew. You then enter
+your administrator password once, for the `to` name in `/etc/hosts`.
+
+For other agents, copy `skills/toslash` into the agent's skills directory.
 
 ### Homebrew
 
@@ -102,12 +117,16 @@ them. ToSlash has a small JSON API and an agent skill so the agent registers
 each one under a name you will remember.
 
 **The skill.** `skills/toslash/SKILL.md` tells an agent when to register a
-link, how to pick a good name, and how to look links up later. Copy the folder
-into your agent's skills directory, for Claude Code:
+link, how to pick a good name, and how to look links up later. It also starts
+ToSlash when it is not running, and offers to install it when it is missing.
+In Claude Code, install it as a plugin:
 
 ```sh
-cp -R skills/toslash ~/.claude/skills/
+claude plugin install toslash --marketplace nicholasren/toslash
 ```
+
+For other agents, copy the `skills/toslash` folder into the agent's skills
+directory.
 
 Then ask for things as usual: "publish this as an artifact", "start the API
 server", "where is that roadmap from last week?".
