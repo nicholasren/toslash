@@ -1,6 +1,6 @@
 cask "toslash" do
-  version "0.1.1"
-  sha256 "a628a823d96362930efb2db2e34feba666d23c23e04ffddd4a3fade4c7a3a354"
+  version "0.1.2"
+  sha256 "4132dc93982a4ea3489a38bbc3e1bd571621ea2a78665ede89173b3584ecf823"
 
   url "https://github.com/nicholasren/toslash/releases/download/v#{version}/ToSlash-#{version}.dmg"
   name "ToSlash"
